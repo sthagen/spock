@@ -40,6 +40,17 @@ class DataTables extends EmbeddedSpecification {
     9 | 9 | 9
   }
 
+  def "basic usage with semicolon"() {
+    expect:
+    Math.max(a, b) == c
+
+    where:
+    a ; b ; c
+    5 ; 7 ; 7
+    3 ; 1 ; 3
+    9 ; 9 ; 9
+  }
+
   def "table must have at least two columns"() {
     when:
     compiler.compileFeatureBody """
@@ -59,11 +70,19 @@ a
   def "can use pseudo-column to enable one-column table"() {
     expect:
     a == 1
-    _ == _ // won't use this in practice
 
     where:
     a | _
     1 | _
+  }
+
+  def "can use pseudo-column to enable one-column table with semicolon"() {
+    expect:
+    a == 1
+
+    where:
+    a ; _
+    1 ; _
   }
 
   def "table with just a header are not allowed"() {
@@ -74,6 +93,20 @@ true
 
 where:
 a | b
+    """
+
+    then:
+    thrown(SpockExecutionException)
+  }
+
+  def "table with just a header are not allowed with semicolon"() {
+    when:
+    runner.runFeatureBody """
+expect:
+true
+
+where:
+a ; b
     """
 
     then:
@@ -95,6 +128,22 @@ a | 1 | b
     thrown(InvalidSpecCompileException)
   }
 
+  def "header may only contain variable names with semicolon"() {
+    when:
+    compiler.compileFeatureBody """
+expect:
+true
+
+where:
+a ; 1 ; b
+1 ; 1 ; 1
+    """
+
+    then:
+    MultipleFailuresError e = thrown()
+    e.failures*.class == [InvalidSpecCompileException] * 6
+  }
+
   def "header variable names must not clash with local variables"() {
     when:
     compiler.compileFeatureBody """
@@ -112,6 +161,23 @@ a | local
     thrown(InvalidSpecCompileException)
   }
 
+  def "header variable names must not clash with local variables with semicolon"() {
+    when:
+    compiler.compileFeatureBody """
+def local = 1
+
+expect:
+true
+
+where:
+a ; local
+1 ; 1
+    """
+
+    then:
+    thrown(InvalidSpecCompileException)
+  }
+
     def "header variable names must not clash with each other"() {
     when:
     compiler.compileFeatureBody """
@@ -121,6 +187,21 @@ true
 where:
 a | a
 1 | 1
+    """
+
+    then:
+    thrown(InvalidSpecCompileException)
+  }
+
+    def "header variable names must not clash with each other with semicolon"() {
+    when:
+    compiler.compileFeatureBody """
+expect:
+true
+
+where:
+a ; a
+1 ; 1
     """
 
     then:
@@ -166,6 +247,39 @@ a | a
     d = c + 1
   }
 
+  def "tables with semicolon can be mixed with other parameterizations"() {
+    expect:
+    [a, b, c, d] == [1, 2, 3, 4]
+
+    where:
+    a << [1]
+    b ; c
+    2 ; 3
+    d = c + 1
+  }
+
+  def "tables with different separators can be mixed"() {
+    expect:
+    [a, b, c, d] == [1, 2, 3, 4]
+
+    where:
+    a | b
+    1 | 2
+
+    ; c ; d ;
+    ; 3 ; 4 ;
+  }
+
+  def "semicolon separated tables can use boolean operators in cells"() {
+    expect:
+    a
+    b
+
+    where:
+    a            ; b
+    true | false ; true || false
+  }
+
   def "cells may contain arbitrary expressions"() {
     expect:
     a == "oo"
@@ -177,6 +291,17 @@ a | a
     "foo"[1..2] | new Person(age: 23) | Math.max(4, 5)
   }
 
+  def "cells may contain arbitrary expressions with semicolon"() {
+    expect:
+    a == "oo"
+    b.age == 23
+    c == 5
+
+    where:
+    a           ; b                   ; c
+    "foo"[1..2] ; new Person(age: 23) ; Math.max(4, 5)
+  }
+
   def "cells can reference shared and static fields"() {
     expect:
     a == 42
@@ -185,6 +310,16 @@ a | a
     where:
     a           | b
     staticField | sharedField
+  }
+
+  def "cells can reference shared and static fields with semicolon"() {
+    expect:
+    a == 42
+    b == 42
+
+    where:
+    a           ; b
+    staticField ; sharedField
   }
 
   @Issue("https://github.com/spockframework/spock/issues/261")
@@ -225,6 +360,23 @@ local | 1
     thrown(MissingPropertyException)
   }
 
+  def "cells cannot reference local variables (won't be found) with semicolon"() {
+    when:
+    runner.runFeatureBody """
+def local = 42
+
+expect:
+true
+
+where:
+a     ; b
+local ; 1
+    """
+
+    then:
+    thrown(MissingPropertyException)
+  }
+
   def 'cells can reference previous cells'() {
     expect:
     [a, b, c] == [0, 1, 2]
@@ -232,6 +384,15 @@ local | 1
     where:
     a | b     | c
     0 | a + 1 | b + 1
+  }
+
+  def 'cells can reference previous cells with semicolon'() {
+    expect:
+    [a, b, c] == [0, 1, 2]
+
+    where:
+    a ; b     ; c
+    0 ; a + 1 ; b + 1
   }
 
   @Issue("https://github.com/spockframework/spock/issues/763")
@@ -265,16 +426,16 @@ local | 1
       @Unroll def 'a = #a, b = #b'() {
         expect:
         true
-        
+
         where:
         a | b
         0 | a + 1
-        2 | a 
+        2 | a
       }
     '''
 
     then:
-    result.tests().finished().list().testDescriptor.displayName == ["a = 0, b = 1", "a = 2, b = 2" ]
+    result.testEvents().finished().list().testDescriptor.displayName == ["a = 0, b = 1", "a = 2, b = 2" ]
   }
 
   def "cells can't reference next cells"() {
@@ -282,7 +443,7 @@ local | 1
     runner.runFeatureBody '''
       expect:
       false
-      
+
       where:
       a | b
       b | 1
@@ -297,7 +458,7 @@ local | 1
     runner.runFeatureBody '''
       expect:
       false
-      
+
       where:
       a | b
       1 | b + 1
@@ -335,21 +496,21 @@ local | 1
     runner.runFeatureBody '''
       expect:
       g == 12
-  
+
       where:
       a = 1
       b = a + 1
-      
+
       c << [b + 1]
-      
+
       d = c + 1
-      
+
       e         | f
       b + c + d | e + 1
-      
+
       g << [f + 1]
-      
-      h = g + 1       
+
+      h = g + 1
     '''
   }
 
@@ -369,6 +530,22 @@ a | b | c
     thrown(InvalidSpecCompileException)
   }
 
+  def "rows must have same number of elements as header with semicolon"() {
+    when:
+    compiler.compileFeatureBody """
+expect:
+true
+
+where:
+a ; b ; c
+1 ; 2 ; 3
+4 ; 5
+    """
+
+    then:
+    thrown(InvalidSpecCompileException)
+  }
+
   def "cells can be separated with single or double pipe operator"() {
     expect:
     a + b == c
@@ -379,6 +556,35 @@ a | b | c
     4 | 5 || 9
   }
 
+  def "cells can be separated with any amount of semicolons"() {
+    expect:
+    a + b == c
+
+    where:
+    a ; b ;;   c
+    1 ; 2 ;;;  3
+    4 ; 5 ;;;; 9
+  }
+
+  def "tables can be surrounded by borders of semicolons and underscores"() {
+    expect:
+    a + b == c
+    d + f == g
+
+    where:
+    ______________
+    ; a ; b ;; c ;
+    ; 1 ; 2 ;; 3 ;
+    ; 4 ; 5 ;; 9 ;
+    ______________
+
+    ______________
+    ; d | f || g ;
+    ; 1 | 2 || 3 ;
+    ; 4 | 5 || 9 ;
+    ______________
+  }
+
   def "consistent use of cell separators is not enforced"() {
     expect:
     a + b == c
@@ -387,6 +593,106 @@ a | b | c
     a | b || c
     1 | 2 || 3
     4 || 5 | 9
+  }
+
+  def "two or more underscores can be used to separate multiple data tables"() {
+    expect:
+    runner.runFeatureBody """
+expect:
+a + b == c
+d + e == f
+
+where:
+a | b | c
+1 | 2 | 3
+4 | 5 | 9
+$dataTableSeparator
+d | e | f
+1 | 2 | 3
+4 | 5 | 9
+"""
+
+    where:
+    dataTableSeparator << (2..20).collect { '_' * it }
+  }
+
+  def "two or more underscores can not be used to separate multiple data tables if they represent a local variable"() {
+    when:
+    compiler.compileFeatureBody """
+def $dataTableSeparator = ''
+
+expect:
+a + b == c
+d + e == f
+
+where:
+a | b | c
+1 | 2 | 3
+4 | 5 | 9
+$dataTableSeparator
+d | e | f
+1 | 2 | 3
+4 | 5 | 9
+"""
+
+    then:
+    InvalidSpecCompileException isce = thrown()
+    isce.message.startsWith('where-blocks may only contain parameterizations')
+
+    where:
+    dataTableSeparator << (2..20).collect { '_' * it }
+  }
+
+  def "two or more underscores can not be used to separate multiple data tables if they represent a field"() {
+    when:
+    compiler.compileSpecBody """
+def $dataTableSeparator = ''
+
+def foo() {
+  expect:
+  a + b == c
+  d + e == f
+
+  where:
+  a | b | c
+  1 | 2 | 3
+  4 | 5 | 9
+  $dataTableSeparator
+  d | e | f
+  1 | 2 | 3
+  4 | 5 | 9
+}
+"""
+
+    then:
+    InvalidSpecCompileException isce = thrown()
+    isce.message.startsWith('where-blocks may only contain parameterizations')
+
+    where:
+    dataTableSeparator << (2..20).collect { '_' * it }
+  }
+
+  def "different tables have to have same row count"() {
+    when:
+    runner.runFeatureBody """
+expect:
+true
+
+where:
+a | _
+1 | _
+4 | _
+3 | _
+__
+
+b | _
+2 | _
+5 | _
+"""
+
+    then:
+    SpockExecutionException see = thrown()
+    see.message =~ 'fewer values than previous'
   }
 
   static class Person {

@@ -1,9 +1,11 @@
 import java.text.SimpleDateFormat
 
+import static groovy.io.FileType.FILES
+
 plugins {
   id 'com.gradle.build-scan' version '2.2.1'
   id "base"
-  id "org.asciidoctor.convert" version "1.6.0"
+  id "org.asciidoctor.jvm.convert" version "3.1.0"
   id "jacoco"
   id "net.nemerosa.versioning" version "2.8.2"
   id "de.marcphilipp.nexus-publish" version "0.3.1" apply false
@@ -23,7 +25,7 @@ ext {
       minGroovyVersion = "2.5.0"
       maxGroovyVersion = "2.9.99"
     } else if (variant == 3.0) {
-      groovyVersion = "3.0.0"
+      groovyVersion = "3.0.2"
       minGroovyVersion = "3.0.0"
       maxGroovyVersion = "3.9.99"
     } else {
@@ -57,8 +59,8 @@ ext {
     cglib: "cglib:cglib-nodep:3.2.10",
     groovy: groovyDependencies,
     h2database: "com.h2database:h2:1.3.176",
-    junit4: "junit:junit:4.12",
-    junitBom: "org.junit:junit-bom:5.5.2",
+    junit4: "junit:junit:4.13",
+    junitBom: "org.junit:junit-bom:5.6.1",
     jupiter: "org.junit.jupiter:junit-jupiter",
     junitPlatform: "org.junit.platform:junit-platform-engine",
     junitPlatformTestkit: "org.junit.platform:junit-platform-testkit",
@@ -67,9 +69,16 @@ ext {
     objenesis: "org.objenesis:objenesis:3.0.1",
     jaxb: "javax.xml.bind:jaxb-api:2.3.0"
   ]
-  Date buildTimeAndDate = new Date()
-  buildDate = new SimpleDateFormat('yyyy-MM-dd').format(buildTimeAndDate)
-  buildTime = new SimpleDateFormat('HH:mm:ss.SSSZ').format(buildTimeAndDate)
+  if (snapshotVersion && System.env.CI != "true") {
+    //build time is not crucial for local SNAPSHOT builds, unless published from CI server
+    //speed up local development by leveraging Gradle caching mechanism
+    buildDate = "1970-01-01"
+    buildTime = "00:00:00.000Z"
+  } else {
+    Date buildTimeAndDate = new Date()
+    buildDate = new SimpleDateFormat('yyyy-MM-dd').format(buildTimeAndDate)
+    buildTime = new SimpleDateFormat('HH:mm:ss.SSSZ').format(buildTimeAndDate)
+  }
 }
 
 allprojects {
@@ -108,6 +117,18 @@ allprojects {
 
 apply from: script("ide")
 
+allprojects {
+  repositories {
+    mavenCentral()
+    maven {
+      url 'https://jitpack.io'
+      content {
+        includeGroup "com.github.junit-team.junit5"
+      }
+    }
+  }
+}
+
 subprojects {
   apply plugin: "groovy"
   apply plugin: "jacoco"
@@ -133,16 +154,6 @@ subprojects {
       }
       groovy {
         srcDir "src/${ss.name}.java$jv/groovy"
-      }
-    }
-  }
-
-  repositories {
-    mavenCentral()
-    maven {
-      url 'https://jitpack.io'
-      content {
-        includeGroup "com.github.junit-team.junit5"
       }
     }
   }
@@ -312,7 +323,7 @@ task publishDocs(type: Exec) {
   git checkout gh-pages
   rm -rf docs/$variantLessVersion
   mkdir -p docs/$variantLessVersion
-  cp -r build/asciidoc/html5/* docs/$variantLessVersion
+  cp -r build/docs/asciidoc/* docs/$variantLessVersion
   git add docs
   git commit -qm "Publish docs/$variantLessVersion"
   git push "https://\$GITHUB_TOKEN@github.com/spockframework/spock.git" gh-pages 2>&1 | sed "s/\$GITHUB_TOKEN/xxx/g"
@@ -351,7 +362,8 @@ task groovydoc(type: Groovydoc) {
 configureGroovydoc(groovydoc)
 
 asciidoctor {
-  sourceDir = file("docs")
+  sourceDir = "docs"
+  baseDirFollowsSourceDir()
   logDocuments = true
   attributes "source-highlighter": "coderay", "linkcss": true, "sectanchors": true, "revnumber": variantLessVersion
   // also treats the included specs as inputs
@@ -362,6 +374,23 @@ asciidoctor {
   inputs.dir file("spock-spring/boot2-test/src/test/groovy/org/spockframework/boot2")
   inputs.dir file("spock-spring/spring3-test/src/test/groovy/org/spockframework/spring3")
   inputs.dir file("spock-spring/spring5-test/src/test/groovy/org/spockframework/spring5")
+
+  doFirst {
+    def errors = []
+    sourceDir.eachFileRecurse(FILES) { file ->
+      if (file.name =~ /(?<!^index)\.adoc$/) {
+        (file.text =~ /<<([^>#]+\.adoc)#,[^>]+>>/)
+          .collect { it[1] }
+          .unique()
+          .each {
+            errors << "$file.name contains a cross-document link to $it without anchor, this will break in one-page variant"
+          }
+      }
+    }
+    if (errors) {
+      throw new IllegalArgumentException(errors.join('\n'))
+    }
+  }
 }
 
 File script(String name) {
