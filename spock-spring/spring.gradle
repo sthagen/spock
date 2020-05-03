@@ -22,8 +22,7 @@ dependencies {
   testCompile "org.springframework:spring-jdbc:$springVersion"
   testCompile "org.springframework:spring-tx:$springVersion"
   testCompile "javax.inject:javax.inject:1"
-  // for groovy.sql.Sql
-  testCompile groovyTestDependencies
+  testCompile libs.groovySql // for groovy.sql.Sql
 
   testRuntime libs.h2database
   testRuntime libs.log4j
@@ -39,9 +38,6 @@ check.dependsOn testCglib
 jar {
   manifest {
     attributes(
-      'Created-By': "${System.properties['java.version']} (${System.properties['java.vendor']} ${System.properties['java.vm.version']})".toString(),
-      'Build-Date': buildDate,
-      'Build-Time': buildTime,
       'Build-Revision': versioning.info.commit,
       'Specification-Title': project.name,
       'Specification-Version': baseVersion,

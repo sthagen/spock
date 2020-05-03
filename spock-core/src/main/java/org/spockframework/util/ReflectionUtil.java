@@ -14,6 +14,7 @@
 
 package org.spockframework.util;
 
+import org.codehaus.groovy.runtime.MetaClassHelper;
 import org.spockframework.gentyref.GenericTypeReflector;
 
 import java.io.File;
@@ -73,7 +74,7 @@ public abstract class ReflectionUtil {
   }
 
   public static <T extends Annotation> List<T> collectAnnotationRecursive(Class<?> cls, Class<T> annotationClass) {
-    return collectAnnotationRecursive(cls, annotationClass, new ArrayList<T>());
+    return collectAnnotationRecursive(cls, annotationClass, new ArrayList<>());
   }
 
   private static <T extends Annotation> List<T> collectAnnotationRecursive(Class<?> cls, Class<T> annotationClass,
@@ -187,10 +188,7 @@ public abstract class ReflectionUtil {
   }
 
   public static Class[] getTypes(Object... objects) {
-    Class[] classes = new Class[objects.length];
-    for (int i = 0; i < objects.length; i++)
-      classes[i] = ObjectUtil.getClass(objects[i]);
-    return classes;
+    return MetaClassHelper.convertToTypeArray(objects);
   }
 
   @Nullable
