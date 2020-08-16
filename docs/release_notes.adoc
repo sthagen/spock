@@ -1,7 +1,35 @@
 = Release Notes
 include::include.adoc[]
 
-== 2.0-M3 (tbd)
+== 2.0-M4 (tbd)
+
+- Add a way to register `ConfigurationObject` globally without the need for a global extension.
+
+- Annotations for local extensions can now be defined as `@Repeatable` and applied multiple times to the same target.
+  Spock will handle this appropriately and call the extensions `visitSpecAnnotations` method with all annotations.
+  If these methods are not overwritten, they forward to the usual `visitSpecAnnotation` methods once for each annotation.
+
+- `AbstractAnnotationDrivenExtension` is now deprecated and its logic was moved to `default` methods of
+  `IAnnotationDrivenExtension` which should be implemented directly now instead of extending the abstract class.
+
+- `@ConfineMetaClassChanges` is now repeatable
+
+- `@Issue` is now repeatable
+
+- `@Requires` is now repeatable
+
+- `@See` is now repeatable
+
+- `@Subject` is now repeatable
+
+- `@Use` is now repeatable
+
+- `@UseModules` is now repeatable
+
+- Fix https://github.com/spockframework/spock/issues/994[#994] nested closures in argument constraints are not treated as implicit assertions anymore
+
+
+== 2.0-M3 (2020-06-11)
 
 === Breaking Changes
 
@@ -49,13 +77,19 @@ which should not be a problem in the majority of cases.
 
 At the same time, using JUnit 4's annotations is discouraged (and considered `deprecated`), the same using the other elements of JUnit 4 (as `(Class)Rule`s).
 
+==== Reduce spock-core direct groovy dependencies
+
+`spock-core` now only depends on `groovy.jar`. All other Groovy dependencies have been removed,
+this should make dependency management a bit easier.
+If you relied on other groovy dependencies transitively, you will need to add them directly.
+
 ==== Upgrade to JUnit 5.6 (and JUnit Platform 1.6)
 
-JUnit Platform 1.6 (https://junit.org/junit5/docs/5.6.0/release-notes/index.html#deprecations-and-breaking-changes[deprecated]) methods (from experimental API)  in `EngineExecutionResults` that Spock was using. To keep runtime compatibility with JUnit 5.6 and incoming 5.7 the implementation has been switched to the new methods. As a result, Spock 2.0-M3 cannot work with JUnit 5.5 and lower. The problem might only occur if a project overrides default JUnit Platform version provided by Spock.
+JUnit Platform 1.6 https://junit.org/junit5/docs/5.6.0/release-notes/index.html#deprecations-and-breaking-changes[deprecated] methods (from experimental API)  in `EngineExecutionResults` that Spock was using. To keep runtime compatibility with JUnit 5.6 and incoming 5.7 the implementation has been switched to the new methods. As a result, Spock 2.0-M3 cannot work with JUnit 5.5 and lower. The problem might only occur if a project overrides default JUnit Platform version provided by Spock.
 
 ==== New meaning of `>> _`
 
-The meaning of `>> _` has changed form "use the default response" to "return a stubbed value" (<<interaction_based_testing.adoc#_returning_a_default_response,Docs>>).
+The meaning of `>> _` has changed from "use the default response" to "return a stubbed value" (<<interaction_based_testing.adoc#_returning_a_default_response,Docs>>).
 The original behavior was only ever documented in the Javadocs and was basically the same to just omitting it.
 The only use-case was chained responses `>> "a" >> _ >> "b"`,
 but even here it is clearer to just use `null` or `{ callRealMethod() }` explicitly.
@@ -71,7 +105,8 @@ subscriber.receive(_) >> _
 
 The token `#iterationCount` in unroll patterns was renamed to `#iterationIndex`.
 If you use it somewhere, you have to manually change it to the new name
-or you will get an `#Error:iterationCount` rendering instead.
+or the test will fail unless you disabled expression asserting,
+then you will get an `#Error:iterationCount` rendering instead.
 // end::renamed-iteration-count-token[]
 
 // tag::no-access-to-data-variables-in-data-pipes[]
@@ -104,6 +139,16 @@ a << [1, 2]
 b = a
 ----
 // end::no-access-to-data-variables-in-data-pipes[]
+
+// tag::assert-unroll-expressions-by-default[]
+==== Assert unroll expressions by default
+
+The system property `spock.assertUnrollExpressions` is not supported anymore.
+Instead the new default behavior is equal to having this property set to `true`.
+This means tests that were successful but had an `#Error:` name rendering will now fail.
+It can be set back to the old pre Spock 2.0 behaviour by setting
+`unroll { validateExpressions false }` in the Spock configuration file.
+// end::assert-unroll-expressions-by-default[]
 
 ==== For extension developers
 
@@ -154,12 +199,13 @@ a ; b ;; c
 // tag::fancy-iteration-naming[]
 - The default unroll pattern changed from the rather generic `#featureName[#iterationIndex]` to a more fancy
   version that lists all data variables and their values additionally to the feature name and iteration index.
-  If you prefer to retain the old behaviour, you can set the system property `spock.globalUnrollPattern`
-  to the value `#featureName[#iterationIndex]` and you will get the same result as previously.
+  If you prefer to retain the old behaviour, you can set the setting
+  `unroll { defaultPattern '#featureName[#iterationIndex]' }` in the Spock configuration file
+  and you will get the same result as previously.
 // end::fancy-iteration-naming[]
 
 - If neither a parameter to the `@Unroll` annotation is given, nor the method name contains a `#`,
-  now the system property `spock.globalUnrollPattern` is inspected. If it is set to a non-blank string,
+  now the configuration file setting `unroll { defaultPattern }` is inspected. If it is set to a non-`null` string,
   this value is used as unroll pattern.
 
 - `IterationInfo` now has a property for the `iterationIndex` and one for a map of data variable names to values.
@@ -195,7 +241,11 @@ Spy(constructorArgs: [null as String, (Pattern) null])
 def "I'll run everywhere but on Windows"() { ... }
 ----
 
-- Upgrade Groovy to 2.5.11 (improved Java 14+ support) and 3.0.3 (fixes #1127)
+- Execution with an unsupported Groovy version can be allowed with `-Dspock.iKnowWhatImDoing.disableGroovyVersionCheck=true` (#1164)
+
+- Relax maximum allowed Groovy version in snapshot builds (#1108)
+
+- Upgrade Groovy to 2.5.12 (improved Java 14+ support) and 3.0.4 (fixes #1127)
 
 - Upgrade JUnit 4 to 4.13 (in `spock-junit4`)
 
@@ -222,6 +272,48 @@ def "I'll run everywhere but on Windows"() { ... }
 - The condition closures for `@IgnoreIf`, `@Requires` and `@PendingFeatureIf` can now access data variables
   if applied to a data driven feature. This has further implications that are documented in the respective
   documentation parts and JavaDocs.
+
+- Data driven features are now unrolled by default. `@Unroll` can still be used to specify a custom naming pattern.
+  A simple `@Unroll` without argument is not needed anymore except when undoing a spec-level `@Rollup` annotation
+  or if unrolling by default is disabled, so any simple `@Unroll` annotations can be removed from existing code. You
+  can verify this by looking at the test count which should not have been changed after you removed the simple
+  `@Unroll` annotations.
+
+- `@Rollup` can now be used on feature and spec level to explicitly roll up any feature where the reporting of single
+  iterations is not wanted.
+
+- The setting `unroll { unrollByDefault false }` in the Spock configuration file can be set to roll up all
+  features by default if not overwritten by explicit `@Unroll` annotations and thus reinstate the pre
+  Spock 2.0 behaviour.
+
+- Updated OSGI support with using `bnd` (#1154, #1175)
+
+- Fix `@PendingFeature` logic (#1103)
+
+- Do not strip type information from arguments (#1134)
+
+- Simplify work-around to get the reference to the current closure (#1131)
+
+- Set source position for return statement in data provider method (#1116)
+
+- Add `Spy(T obj, Closure interactions)` (#1115)
+
+- Reduce number of Groovy dependencies to just groovy.jar (#1109)
+
+- Improve `ExceptionUtil.sneakyThrow` declaration (#1077)
+
+- Print up to 5 last mock invocations for a wrong order error (#1093)
+
+- Fix `EmptyOrDummyResponse` returning mock instance for `Object` (#1092)
+
+- Remove unnecessary reflection for Java 8 types in `EmptyOrDummyResponse` (#1091)
+
+- Update old Issue annotations to point to migrated github issues (#1003)
+
+- Test Spock with Java 14 (#1155)
+
+Thanks to all the contributors to this release: Björn Kautler, Marcin Zajączkowski, Raymond Augé, Roman Tretiak, Camilo Jorquera, Shil Sinha
+
 
 == 2.0-M2 (2020-02-10)
 

@@ -45,7 +45,12 @@ class EmbeddedSpecRunner {
 
   Closure configurationScript = null
   List<Class> extensionClasses = []
+  List<Class> configClasses = []
   boolean inheritParentExtensions = true
+
+  void configurationScript(Closure configurationScript) {
+    this.configurationScript = configurationScript
+  }
 
   void addPackageImport(String pkg) {
     compiler.addPackageImport(pkg)
@@ -81,7 +86,7 @@ class EmbeddedSpecRunner {
     }
   }
 
-  SummarizedEngineExecutionResults runClasses(List classes) {
+  SummarizedEngineExecutionResults runClasses(List<Class<?>> classes) {
     withNewContext {
       doRunRequest(classes.findAll { !Modifier.isAbstract(it.modifiers) }.collect {selectClass(it)})
     }
@@ -121,8 +126,8 @@ class EmbeddedSpecRunner {
     def newSpockUserHome = new File(context.spockUserHome, "EmbeddedSpecRunner")
     def script = configurationScript ?
         new ConfigurationScriptLoader(newSpockUserHome).loadClosureBasedScript(configurationScript) : null
-    RunContext.withNewContext(newContextName, newSpockUserHome, script,
-        extensionClasses, inheritParentExtensions, block as IThrowableFunction)
+    (T)RunContext.withNewContext(newContextName, newSpockUserHome, script,
+        extensionClasses, configClasses, inheritParentExtensions, block as IThrowableFunction)
   }
 
   private SummarizedEngineExecutionResults doRunRequest(List<DiscoverySelector> selectors) {
@@ -177,6 +182,26 @@ class EmbeddedSpecRunner {
       return results.allEvents().finished().stream()
         .reduce{first, second -> second} // fancy for .last()
         .map{it.timestamp.toEpochMilli()}.orElseGet {0}
+    }
+
+    long getDynamicallyRegisteredCount() {
+      return results.allEvents().dynamicallyRegistered().count()
+    }
+
+    long getTotalStartedCount() {
+      return results.allEvents().started().count()
+    }
+
+    long getTotalSkippedCount() {
+      return results.allEvents().skipped().count()
+    }
+
+    long getTotalAbortedCount() {
+      return results.allEvents().aborted().count()
+    }
+
+    long getTotalSucceededCount() {
+      return results.allEvents().succeeded().count()
     }
 
     @Override
