@@ -6,6 +6,7 @@ Spock comes with a powerful extension mechanism, which allows to hook into a spe
 behavior. In this chapter, we will first learn about Spock's built-in extensions, and then dive into writing custom
 extensions.
 
+[[spock-configuration-file]]
 == Spock Configuration File
 
 Some extensions can be configured with options in a Spock configuration file. The description for each extension will
@@ -29,6 +30,19 @@ runner {
   filterStackTrace false
 }
 ----
+
+=== Parallel Execution Configuration
+
+[source,groovy]
+----
+runner {
+  parallel {
+    //...
+  }
+}
+----
+
+See the <<parallel_execution.adoc#parallel-execution,Parallel Execution>> section for a detailed description.
 
 == Built-In Extensions
 
@@ -88,13 +102,12 @@ later feature methods may depend on earlier feature methods having executed.
 
 === IgnoreIf
 
-To ignore a feature method under certain conditions, annotate it with `spock.lang.IgnoreIf`,
+To ignore a feature method or specification under certain conditions, annotate it with `spock.lang.IgnoreIf`,
 followed by a predicate:
 
-[source,groovy]
+[source,groovy,indent=0]
 ----
-@IgnoreIf({ System.getProperty("os.name").contains("windows") })
-def "I'll run everywhere but on Windows"() { ... }
+include::{sourcedir}/extension/IgnoreIfDocSpec.groovy[tag=example-a]
 ----
 
 To make predicates easier to read and write, the following properties are available inside the closure:
@@ -103,13 +116,24 @@ To make predicates easier to read and write, the following properties are availa
 * `env` A map of all environment variables
 * `os` Information about the operating system (see `spock.util.environment.OperatingSystem`)
 * `jvm` Information about the JVM (see `spock.util.environment.Jvm`)
+* `instance` The specification instance if instance fields, shared fields or instance methods are needed.
+  If this property is used, the whole annotated element cannot be skipped up-front without executing fixtures,
+  data providers and similar. Instead the whole workflow is followed up to the feature method invocation,
+  where then the closure is checked and it is decided whether to abort the specific iteration or not.
 
 Using the `os` property, the previous example can be rewritten as:
 
-[source,groovy]
+[source,groovy,indent=0]
 ----
-@IgnoreIf({ os.windows })
-def "I'll run everywhere but on Windows"() { ... }
+include::{sourcedir}/extension/IgnoreIfDocSpec.groovy[tag=example-b]
+----
+
+If multiple `@IgnoreIf` annotations are present, they are effectively combined with a logical "or".
+The annotated element is skipped if any of the conditions evaluates to `true`:
+
+[source,groovy,indent=0]
+----
+include::{sourcedir}/extension/IgnoreIfDocSpec.groovy[tag=example-c]
 ----
 
 Care should be taken when ignoring feature methods in a spec class annotated with `spock.lang.Stepwise` since
@@ -119,10 +143,9 @@ To use IDE support like code completion, you can also use the argument to the cl
 `org.spockframework.runtime.extension.builtin.PreconditionContext`. This enables the IDE with type information
 which is not available otherwise:
 
-[source,groovy]
+[source,groovy,indent=0]
 ----
-@IgnoreIf({ PreconditionContext it -> it.os.windows })
-def "I'll run everywhere but on Windows"() { ... }
+include::{sourcedir}/extension/IgnoreIfDocSpec.groovy[tag=example-d]
 ----
 
 If applied to a data driven feature, the closure can also access the data variables.
@@ -195,15 +218,20 @@ and only if all iterations become successful will be marked as failing. But if t
 does reference valid data variables, the individual iterations where the condition holds are
 deemed pending and each will individually fail as soon as it would be successful without this annotation.
 
-[source,groovy]
+[source,groovy,indent=0]
 ----
-@PendingFeatureIf({ os.windows })
-def "I'm not yet implemented on windows, but I am on other operating systems"() { ... }
+include::{sourcedir}/extension/PendingFeatureIfDocSpec.groovy[tag=example-a]
 
-@PendingFeatureIf({ sys.targetEnvironment == "prod" })
-def "This feature isn't deployed out to production yet, and isn't expected to pass"() { ... }
+include::{sourcedir}/extension/PendingFeatureIfDocSpec.groovy[tag=example-b]
 ----
 
+It is also supported to have multiple `@PendingFeatureIf` annotations or a mixture of `@PendingFeatureIf` and
+`@PendingFeature`, for example to ignore certain exceptions only under certain conditions.
+
+[source,groovy,indent=0]
+----
+include::{sourcedir}/extension/PendingFeatureIfDocSpec.groovy[tag=example-c]
+----
 
 === Stepwise
 
@@ -223,6 +251,8 @@ failure are skipped.
 
 `Stepwise` does not override the behaviour of annotations such as `Ignore`, `IgnoreRest`, and `IgnoreIf`, so care
 should be taken when ignoring feature methods in spec classes annotated with `Stepwise`.
+
+NOTE: This will also set the execution mode to `SAME_THREAD`, see <<parallel-execution.adoc#parallel-execution, Parallel Execution>> for more information.
 
 === Timeout
 
@@ -369,6 +399,8 @@ methods.
 To use multiple categories, you can either give multiple categories to the `value` attribute
 of the annotation or you can apply the annotation multiple times to the same target.
 
+NOTE: This will also set the execution mode to `SAME_THREAD` if applied on a `Specification`, see <<parallel-execution.adoc#parallel-execution, Parallel Execution>> for more information.
+
 === ConfineMetaClassChanges
 
 To confine meta class changes to the scope of a feature method or spec class, use `spock.util.mop.ConfineMetaClassChanges`:
@@ -391,6 +423,8 @@ CAUTION: Temporarily changing the meta classes is only safe when specs are
 run in a single thread per JVM. Even though many execution environments do limit themselves to one thread
 per JVM, keep in mind that Spock cannot enforce this.
 
+NOTE: This will acquire a `READ_WRITE` lock for `Resources.META_CLASS_REGISTRY`, see <<parallel-execution.adoc#parallel-execution, Parallel Execution>> for more information.
+
 === RestoreSystemProperties
 Saves system properties before the annotated feature method (including any setup and cleanup methods) gets run,
 and restores them afterwards.
@@ -412,6 +446,8 @@ def "determines family based on os.name system property"() {
 CAUTION: Temporarily changing the values of system properties is only safe when specs are
 run in a single thread per JVM. Even though many execution environments do limit themselves to one thread
 per JVM, keep in mind that Spock cannot enforce this.
+
+NOTE: This will acquire a `READ_WRITE` lock for `Resources.SYSTEM_PROPERTIES`, see <<parallel-execution.adoc#parallel-execution, Parallel Execution>> for more information.
 
 === AutoAttach
 
@@ -457,7 +493,7 @@ feature method and every iteration per parametrized feature method will have the
 include::{sourcedir}/extension/TempDirDocSpec.groovy[tag=example]
 ----
 
-If you want to customize the parent directory for temporary directories, you can use the <<Spock Configuration File>>.
+If you want to customize the parent directory for temporary directories, you can use the <<spock-configuration-file,Spock Configuration File>>.
 
 If `keep` is set to `true`, Spock will not delete temporary directories after tests. The default value is taken from
 system property `spock.tempDir.keep` or `false`, if undefined.
@@ -516,7 +552,7 @@ To indicate that a feature or spec relates to one or more issues in an external 
 include::{sourcedir}/extension/IssueDocSpec.groovy[tag=example]
 ----
 
-If you have a common prefix URL for all issues in a project, you can use the <<Spock Configuration File>> to set it up
+If you have a common prefix URL for all issues in a project, you can use the <<spock-configuration-file,Spock Configuration File>> to set it up
 for all at once. If it is set, it is prepended to the value of the `@Issue` annotation when building the URL.
 
 If the `issueNamePrefix` is set, it is prepended to the value of the `@Issue` annotation when building the name for the
@@ -575,7 +611,7 @@ execution of `setupSpec` methods and the after-actions are done after the execut
 Spock is capable of including and excluding specifications according to their classes, super-classes and interfaces and
 according to annotations that are applied to the specification. Spock is also capable of including and excluding
 individual features according to annotations that are applied to the feature method. The configuration for what to
-include or exclude is done according to the <<Spock Configuration File>> section.
+include or exclude is done according to the <<spock-configuration-file,Spock Configuration File>> section.
 
 .Include / Exclude Configuration
 [source,groovy]
@@ -597,7 +633,7 @@ runner {
 Spock can remember which features last failed and how often successively and also how long a feature needed to be
 tested. For successive runs Spock will then first run features that failed at last run and first features that failed
 more often successively. Within the previously failed or non-failed features Spock will run the fastest tests first.
-This behaviour can be enabled according to the <<Spock Configuration File>> section. The default value is `false`.
+This behaviour can be enabled according to the <<spock-configuration-file,Spock Configuration File>> section. The default value is `false`.
 
 .Optimize Run Order Configuration
 [source,groovy]
@@ -612,7 +648,7 @@ runner {
 Spock can create a report log of the executed tests in JSON format. This report contains also things like
 <<Title and Narrative,`@Title`>>, <<Title and Narrative,`@Narrative`>>, <<See,`@See`>> and <<Issue,`@Issue`>> values or
 <<spock_primer.adoc#_blocks,block descriptors>>.
-This report can be enabled according to the <<Spock Configuration File>> section. The default is to not generate this
+This report can be enabled according to the <<spock-configuration-file,Spock Configuration File>> section. The default is to not generate this
 report.
 
 For the report to be generated, you have to enable it and set at least the `logFileDir` and `logFileName`. `enabled` can
@@ -742,7 +778,7 @@ extension magic, like attaching interceptors to various interception points as d
 
 === Configuration Objects
 
-You can add own sections in the <<Spock Configuration File>> for your extension by creating POJOs or POGOs that are
+You can add own sections in the <<spock-configuration-file,Spock Configuration File>> for your extension by creating POJOs or POGOs that are
 annotated with `@ConfigurationObject` and have a default constructor (either implicitly or explicitly). The argument to
 the annotation is the name of the top-level section that is added to the Spock configuration file syntax. The default
 values for the configuration options are defined in the class by initializing the fields at declaration time or in the

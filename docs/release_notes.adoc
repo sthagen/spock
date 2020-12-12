@@ -1,7 +1,11 @@
 = Release Notes
 include::include.adoc[]
 
-== 2.0-M4 (tbd)
+== 2.0-M5 (tbd)
+
+== 2.0-M4 (2020-11-01)
+
+- *Added <<parallel_execution.adoc#parallel-execution,Parallel Execution>> support*
 
 - Add a way to register `ConfigurationObject` globally without the need for a global extension.
 
@@ -9,25 +13,33 @@ include::include.adoc[]
   Spock will handle this appropriately and call the extensions `visitSpecAnnotations` method with all annotations.
   If these methods are not overwritten, they forward to the usual `visitSpecAnnotation` methods once for each annotation.
 
+- `@ConfineMetaClassChanges`, `@Issue`, `@IgnoreIf`, `@PendingFeatureIf`, `@Requires`, `@See`, `@Subject`, `@Use`, and `@UseModules` are now repeatable annotations
+
+- `@Requires`, `@IgnoreIf` and `@PendingFeatureIf` can now access instance fields, shared fields and instance methods
+  by using the `instance.` qualifier inside the condition closure.
+
 - `AbstractAnnotationDrivenExtension` is now deprecated and its logic was moved to `default` methods of
   `IAnnotationDrivenExtension` which should be implemented directly now instead of extending the abstract class.
 
-- `@ConfineMetaClassChanges` is now repeatable
+- Add `@TempDir` built-in extension
 
-- `@Issue` is now repeatable
+- `@PendingFeature` and `@PendingFeatureIf` can now be used together
 
-- `@Requires` is now repeatable
+- Fix https://github.com/spockframework/spock/issues/1158[#1158] Fix strange bug with setter/getter handling of mocks in groovy
 
-- `@See` is now repeatable
+- Fix https://github.com/spockframework/spock/issues/1216[#1216] perform argument coercion for `GroovyMock` method arguments
 
-- `@Subject` is now repeatable
+- Fix https://github.com/spockframework/spock/issues/1169[#1169] check skipped state in Node.prepare and do nothing if already skipped
 
-- `@Use` is now repeatable
+- Fix https://github.com/spockframework/spock/issues/1200[#1200] name clashes where variables that are named like method calls destroy the method call
 
-- `@UseModules` is now repeatable
+- Fix https://github.com/spockframework/spock/issues/1202[#1202] NullPointerException with array initializers
 
-- Fix https://github.com/spockframework/spock/issues/994[#994] nested closures in argument constraints are not treated as implicit assertions anymore
+- Fix https://github.com/spockframework/spock/issues/994[#994] don't treat nested closures in argument constraints as implicit assertions anymore
 
+- Replace `hamcrest-core` dependency by `hamcrest`
+
+Thanks to all the contributors to this release: Björn Kautler, Marcin Zajączkowski, DQYuan, Tom Wieczorek, Alexander Kriegisch, Jasper Vandemalle
 
 == 2.0-M3 (2020-06-11)
 
